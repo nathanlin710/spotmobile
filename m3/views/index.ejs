@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+	
+</head>
+
+<body>
+
+</body>
+
+<script src="https://d3js.org/d3.v7.min.js"></script>
+
+<script type="application/javascript">
+
+	const SERVERADDRESS = "http://127.0.0.1:3000"
+
+	// use XML HTTP request to grab data from the server (central)
+	let xmlhttp = new XMLHttpRequest()
+	xmlhttp.onreadystatechange = function () {
+		if (xmlhttp.readyState == 4 && xmlhttp.status == 200) {
+			let responseText = xmlhttp.responseText
+			let sensorValue = parseFloat(JSON.parse(responseText).sensorValue)
+
+			// use d3 to visualize sensor value as the web page background color
+			let colorValue = Math.max(0, Math.min((sensorValue + 1) * 0.5, 1))
+			console.log(colorValue)
+			let color = "rgba(0, 0, 0, " + colorValue + ")"
+			d3.select("body").style("background-color", color)
+
+		}
+	}
+
+	// periodically grab data
+	let getData = () => {
+		xmlhttp.open("POST", SERVERADDRESS, true)
+		xmlhttp.setRequestHeader("Content-type", "application/json")
+		xmlhttp.send("")
+		setTimeout(() => {
+			getData()
+		}, 10)
+	}
+
+	getData()
+
+</script>
+
+</html>

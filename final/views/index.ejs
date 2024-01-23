@@ -1,0 +1,282 @@
+<!DOCTYPE html>
+<html>
+<head>
+ <title>Spotmobile</title>
+ <meta charset="UTF-8">
+ <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Varela">
+ <style>
+ html, body {
+   height: 100%;
+   margin: 0;
+ }
+
+
+ body {
+   background: white;
+   display: flex;
+   flex-direction: column;
+   align-items: center;
+   justify-content: center;
+ }
+ #yay {
+   display: none;
+   font-family: 'Varela';
+ }
+ #loginpls {
+   display: none;
+   font-family: 'Varela';
+   background-color: #191414;
+   color: white;
+   padding: 16px;
+   border-radius: 100em;
+   text-decoration: none;
+ }
+ #title {
+   color: #1DB954;
+   font-family: 'Varela';
+   font-size: 56px;
+ }
+ </style>
+</head>
+<body>
+<h1 id="title">Spotmobile 😂</h1>
+<div id="message">
+   <h1 id="yay">now listening...</h1>
+   <a id="loginpls" href="/login">
+       <div>log in to spotify</div>
+    </a>
+    <h1 id="token"></h1>
+</div>
+
+
+<script defer>
+   var access_token = '<%= access_token %>';
+   if (access_token) {
+       var element = document.getElementById("yay");
+       element.style.display = "block";
+   } else {
+       var element = document.getElementById("loginpls");
+       element.style.display = "block";
+      
+   }
+   // return;
+   // ------------------------------------------------
+   const headers = {
+       'Authorization': `Bearer ${access_token}`,
+       'Content-Type': 'application/json',
+   };
+   let playing = true;
+   let ax = 0
+   let ay = 0
+   let az = 0
+   let gx = 0
+   let gy = 0
+   let gz = 0
+   const SERVERADDRESS = "http://127.0.0.1:3000"
+   // use XML HTTP request to grab data from the server (central)
+   let xmlhttp = new XMLHttpRequest()
+   xmlhttp.onreadystatechange = function () {
+       if (xmlhttp.readyState == 4 && xmlhttp.status == 200) {
+           let responseText = xmlhttp.responseText
+           ax = parseFloat(JSON.parse(responseText).ax)
+           ay = parseFloat(JSON.parse(responseText).ay)
+           // az = parseFloat(JSON.parse(responseText).az)
+           // gx = parseFloat(JSON.parse(responseText).gx)
+           // gy = parseFloat(JSON.parse(responseText).gy)
+           // gz = parseFloat(JSON.parse(responseText).gz)
+       }
+       // console.log(ax, ay)
+       processData(ax, ay, az, gx, gy, gz)
+   }
+
+
+   // periodically grab data
+   let getData = () => {
+       // console.log("getting data")
+       xmlhttp.open("POST", SERVERADDRESS, true)
+       xmlhttp.setRequestHeader("Content-type", "application/json")
+       xmlhttp.send("")
+   }
+  
+   let getPlaybackState =   () => {
+       fetch('https://api.spotify.com/v1/me/player', {
+           method: 'GET',
+           headers: headers,
+       })
+       .then(response => {
+           if (!response.ok) {
+               throw new Error(`HTTP error! Status: ${response.status}`);
+           }
+           console.log(response)
+           return response.json()
+
+
+       }).then(data => {
+           console.log("hi")
+           console.log(data)
+           playing = data['is_playing']
+           console.log('Successfully received playback state.', playing, data.is_playing);
+           setInterval(getData, 100);
+       })
+       .catch(error => {
+           console.error('Error:', error)
+       });
+   }
+   if (access_token) {
+	getPlaybackState()
+   }
+   
+  
+
+
+   // -------------------------------------------------------
+   const dt = .01
+   const alpha = 0.98;  // Weight for accelerometer data
+   const beta = 0.02;   // Weight for gyroscope data
+
+
+   function calculateOrientation(ax, ay, az, gx, gy, gz, dt) {
+   // Complementary filter
+       const pitchAcc = Math.atan2(ay, Math.sqrt(ax**2 + az**2));
+       const rollAcc = Math.atan2(-ax, az);
+
+
+       const pitchGyro = pitchAcc + gx * dt;
+       const rollGyro = rollAcc + gy * dt;
+
+
+       const pitch = alpha * pitchGyro + (1 - alpha) * pitchAcc;
+       const roll = alpha * rollGyro + (1 - alpha) * rollAcc;
+
+
+       return { pitch: radToDeg(pitch), roll: radToDeg(roll) };
+   }
+
+
+   function radToDeg(rad) {
+       return rad * (180 / Math.PI);
+   }
+  
+  
+   cooldown = false;
+   let processData = (ax, ay, az, gx, gy, gz) => {
+       if (cooldown) {
+           console.log("on cooldown")
+           return;
+       }
+       // gyroscope thesholds
+       if (ay < -400 && playing) {
+           pause()
+       } else if (ay < -400 && !playing) {
+           play()
+       } else if (ax < -400) {
+           playNext()
+       } else if (ax > 400){
+           playPrev()
+       } else {
+           return
+       }
+   }
+
+
+
+
+   let playNext = () => {
+       if (cooldown) {
+           console.log("On cooldown");
+           return;
+       }
+       cooldown = true
+       endpoint = 'https://api.spotify.com/v1/me/player/next';
+       fetch(endpoint, {
+           method: 'POST',
+           headers: headers,
+       })
+       .then(response => {
+           if (!response.ok) {
+           throw new Error(`HTTP error! Status: ${response.status}`);
+           }
+           playing = true
+           setTimeout(() => cooldown = false, 100)
+           console.log('Successfully skipped to the next track.');
+       })
+       .catch(error => {
+           console.error('Error:', error)
+           cooldown = false
+       });
+   }
+   let playPrev = () => {
+       cooldown = true
+       endpoint = 'https://api.spotify.com/v1/me/player/previous';
+       fetch(endpoint, {
+           method: 'POST',
+           headers: headers,
+       })
+       .then(response => {
+           if (!response.ok) {
+           throw new Error(`HTTP error! Status: ${response.status}`);
+           }
+           playing = true;
+           setTimeout(() => cooldown = false, 100)
+           console.log('Successfully back to the previous track.');
+       })
+       .catch(error => {
+           console.error('Error:', error)
+           cooldown = false
+       });
+   }
+   let pause = () => {
+       if (!playing || cooldown) {
+           console.log("can't pause")
+           return
+       }
+       if (cooldown) {
+           console.log("On cooldown");
+           return;
+       }
+       cooldown = true
+       endpoint = 'https://api.spotify.com/v1/me/player/pause';
+       fetch(endpoint, {
+           method: 'PUT',
+           headers: headers,
+       })
+       .then(response => {
+           if (!response.ok) {
+           throw new Error(`HTTP error! Status: ${response.status}`);
+           }
+           setTimeout(() => cooldown = false, 100)
+           playing = false
+           console.log('Successfully paused playback.');
+       })
+       .catch(error => {
+           console.error('Error:', error)
+           cooldown = false
+       });
+   }
+   let play = () => {
+       if (playing || cooldown) {
+           console.log("can't play")
+           return;
+       }
+       cooldown = true
+       endpoint = 'https://api.spotify.com/v1/me/player/play';
+       fetch(endpoint, {
+           method: 'PUT',
+           headers: headers,
+       })
+       .then(response => {
+           if (!response.ok) {
+           throw new Error(`HTTP error! Status: ${response.status}`);
+           }
+           setTimeout(() => cooldown = false, 100)
+           playing = true
+           console.log('Successfully resumed playback.');
+       })
+       .catch(error => {
+           console.error('Error:', error)
+           cooldown = false
+       });
+   }
+</script>
+</body>
+</html>
